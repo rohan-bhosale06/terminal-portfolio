@@ -70,6 +70,13 @@ input { font-family: inherit; }
   background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 3px);
   opacity: 0.5;
   mix-blend-mode: overlay;
+  animation: crt-flicker 9s infinite;
+}
+@keyframes crt-flicker {
+  0%, 100% { opacity: 0.5; }
+  3% { opacity: 0.4; } 3.5% { opacity: 0.52; }
+  47% { opacity: 0.5; } 48% { opacity: 0.36; } 49% { opacity: 0.5; }
+  81% { opacity: 0.5; } 81.5% { opacity: 0.43; } 82% { opacity: 0.5; }
 }
 
 .page {
@@ -78,7 +85,12 @@ input { font-family: inherit; }
   display: flex;
   justify-content: center;
   align-items: stretch;
-  background: radial-gradient(120% 90% at 50% 0%, oklch(0.16 0.012 255) 0%, var(--bg-0) 70%);
+  position: relative;
+  z-index: 1;
+  perspective: 1500px;
+  background:
+    radial-gradient(560px circle at var(--mx, 50%) var(--my, 8%), oklch(0.19 0.035 190 / 0.5), transparent 70%),
+    radial-gradient(120% 90% at 50% 0%, oklch(0.16 0.012 255 / 0.9) 0%, oklch(0.115 0.008 255 / 0.88) 70%);
 }
 
 .terminal {
@@ -89,8 +101,12 @@ input { font-family: inherit; }
   border: 1px solid var(--border-3);
   border-radius: 10px;
   overflow: hidden;
-  background: var(--bg-2);
+  background: oklch(0.155 0.011 255 / 0.85);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   box-shadow: 0 24px 70px -20px rgba(0,0,0,0.7);
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
 /* window chrome */
@@ -127,7 +143,7 @@ input { font-family: inherit; }
   width: 250px;
   flex: none;
   border-right: 1px solid var(--border-2);
-  background: var(--bg-3);
+  background: oklch(0.17 0.012 255 / 0.55);
   padding: 20px 16px;
   display: flex;
   flex-direction: column;
@@ -357,8 +373,68 @@ input { font-family: inherit; }
 .p-user { text-shadow: 0 0 9px oklch(0.82 0.14 150 / 0.4); }
 @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 .pulse { animation: breathe 2.6s ease-in-out infinite; }
-.project-card { transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease; }
-.project-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px -12px rgba(0,0,0,0.65); }
+.project-card { transition: border-color 0.18s ease, box-shadow 0.18s ease; }
+.project-card:hover { box-shadow: 0 10px 28px -12px rgba(0,0,0,0.65); }
+
+/* matrix rain canvas — behind the glass terminal */
+#rain {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+/* CRT power-on */
+.crt-boot {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: #000;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: crt-fade 0.35s ease-in 0.62s forwards;
+}
+.crt-boot::before {
+  content: '';
+  width: min(92vw, 900px);
+  height: 3px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 24px 6px rgba(255,255,255,0.9), 0 0 90px 24px oklch(0.82 0.14 150 / 0.55);
+  transform: scaleX(0);
+  animation: crt-line 0.34s ease-out forwards, crt-open 0.35s ease-in 0.38s forwards;
+}
+@keyframes crt-line { to { transform: scaleX(1); } }
+@keyframes crt-open { to { transform: scaleX(1) scaleY(240); opacity: 0; } }
+@keyframes crt-fade { to { opacity: 0; } }
+
+/* 3D tilt cards + glare */
+.tiltable { transform-style: preserve-3d; position: relative; overflow: hidden; }
+.card-glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(300px circle at var(--gx, 50%) var(--gy, 50%), oklch(0.9 0.06 190 / 0.09), transparent 62%);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.tiltable:hover .card-glare { opacity: 1; }
+
+/* scroll reveal */
+.reveal { opacity: 0; transform: translateY(22px); }
+.reveal.in { opacity: 1; transform: none; transition: opacity 0.65s ease, transform 0.65s ease; }
+
+/* accessibility: respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  #rain, .crt-boot { display: none !important; }
+  .crt-overlay { animation: none; }
+  .reveal { opacity: 1 !important; transform: none !important; }
+  .pulse { animation: none; }
+}
 
 /* responsive */
 @media (max-width: 900px) {

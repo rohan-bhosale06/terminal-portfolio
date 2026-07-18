@@ -5,6 +5,9 @@
   const statusLine = $('statusLine');
   const input = $('cmdInput');
 
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
+
   const SECTIONS = ['about', 'experience', 'projects', 'skills', 'github', 'education', 'now', 'contact'];
   const ALIAS = {
     whoami: 'about', bio: 'about', me: 'about', neofetch: 'about',
@@ -41,7 +44,21 @@
     }
   }
 
-  // boot sequence — first line instant, the rest typed out
+  // ---- CRT power-on ----
+  let crtEl = $('crtBoot');
+  function playCrt(cb) {
+    if (!crtEl || reduced) { if (crtEl) crtEl.style.display = 'none'; cb(); return; }
+    const fresh = crtEl.cloneNode(true);
+    crtEl.replaceWith(fresh);
+    crtEl = fresh;
+    fresh.style.display = '';
+    let done = false;
+    const fin = () => { if (done) return; done = true; fresh.style.display = 'none'; cb(); };
+    fresh.addEventListener('animationend', e => { if (e.animationName === 'crt-fade') fin(); });
+    setTimeout(fin, 1500);
+  }
+
+  // ---- boot sequence: first line instant, the rest typed ----
   const bootLines = [
     'Last login: Fri Jul 17 16:23:05 on ttys001',
     'rohan@kl ~ % ./portfolio.sh --profile',
@@ -69,9 +86,9 @@
       }
     }, 11);
   }
-  nextBootLine();
+  playCrt(nextBootLine);
 
-  // smooth scroll
+  // ---- smooth scroll ----
   let raf = null;
   function smoothTo(target) {
     if (raf) cancelAnimationFrame(raf);
@@ -99,7 +116,7 @@
   const navItems = [...document.querySelectorAll('.nav-item')];
   navItems.forEach(el => el.addEventListener('click', () => go(el.dataset.target)));
 
-  // scroll-spy: highlight the section currently in view
+  // ---- scroll-spy ----
   function updateActive() {
     const mtop = main.getBoundingClientRect().top;
     let cur = SECTIONS[0];
@@ -112,10 +129,125 @@
   main.addEventListener('scroll', () => requestAnimationFrame(updateActive), { passive: true });
   updateActive();
 
-  // commands
+  // ---- scroll reveal ----
+  if (!reduced && 'IntersectionObserver' in window) {
+    const secs = document.querySelectorAll('.section');
+    secs.forEach(s => s.classList.add('reveal'));
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(en => {
+        if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+      });
+    }, { root: main, threshold: 0.08 });
+    secs.forEach(s => io.observe(s));
+  }
+
+  // ---- matrix rain ----
+  const rain = $('rain');
+  let rainBoost = false;
+  let rainReady = false;
+  if (rain && !reduced) {
+    rainReady = true;
+    const ctx = rain.getContext('2d');
+    const CH = 'アイウエオカキクケコサシスセソタチツテト0123456789ABCDEF<>/{}[]=+*#$%'.split('');
+    const fs = 14;
+    let W, H, cols, drops;
+    function sizeRain() {
+      W = rain.width = innerWidth;
+      H = rain.height = innerHeight;
+      cols = Math.floor(W / fs) + 1;
+      drops = Array.from({ length: cols }, () => Math.random() * -H / fs);
+    }
+    sizeRain();
+    addEventListener('resize', sizeRain);
+    let last = 0;
+    function draw(t) {
+      requestAnimationFrame(draw);
+      if (document.hidden) return;
+      const interval = rainBoost ? 45 : 85;
+      if (t - last < interval) return;
+      last = t;
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0,0,0,' + (rainBoost ? 0.16 : 0.1) + ')';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.font = fs + 'px "JetBrains Mono", monospace';
+      for (let i = 0; i < cols; i++) {
+        const y = drops[i] * fs;
+        if (y > 0) {
+          const ch = CH[(Math.random() * CH.length) | 0];
+          ctx.fillStyle = Math.random() < 0.06
+            ? 'rgba(190,255,220,0.85)'
+            : 'rgba(52,211,153,' + (rainBoost ? 0.5 : 0.3) + ')';
+          ctx.fillText(ch, i * fs, y);
+        }
+        if (y > H) {
+          if (Math.random() > (rainBoost ? 0.95 : 0.975)) drops[i] = 0;
+        } else {
+          drops[i]++;
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  function setRain(boost) {
+    rainBoost = boost;
+    if (rain) rain.style.opacity = boost ? '0.85' : '0.55';
+  }
+
+  // ---- 3D terminal tilt + ambient glow ----
+  if (finePointer && !reduced) {
+    const term = document.querySelector('.terminal');
+    const page = document.querySelector('.page');
+    let tx = 0, ty = 0, cx = 0, cy = 0, tiltRaf = null;
+    function tiltTick() {
+      cx += (tx - cx) * 0.07;
+      cy += (ty - cy) * 0.07;
+      term.style.transform = `rotateY(${cx.toFixed(3)}deg) rotateX(${cy.toFixed(3)}deg)`;
+      if (Math.abs(cx - tx) > 0.005 || Math.abs(cy - ty) > 0.005) {
+        tiltRaf = requestAnimationFrame(tiltTick);
+      } else {
+        tiltRaf = null;
+      }
+    }
+    addEventListener('mousemove', e => {
+      const nx = e.clientX / innerWidth - 0.5;
+      const ny = e.clientY / innerHeight - 0.5;
+      tx = nx * 3.2;
+      ty = -ny * 2.2;
+      page.style.setProperty('--mx', (e.clientX / innerWidth * 100).toFixed(1) + '%');
+      page.style.setProperty('--my', (e.clientY / innerHeight * 100).toFixed(1) + '%');
+      if (!tiltRaf) tiltRaf = requestAnimationFrame(tiltTick);
+    }, { passive: true });
+  }
+
+  // ---- 3D card tilt + glare ----
+  if (finePointer && !reduced) {
+    document.querySelectorAll('.project-card, .contact-card').forEach(card => {
+      card.classList.add('tiltable');
+      const glare = document.createElement('span');
+      glare.className = 'card-glare';
+      card.appendChild(glare);
+      card.addEventListener('mousemove', e => {
+        const r = card.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width;
+        const py = (e.clientY - r.top) / r.height;
+        card.style.transition = 'transform 0.06s linear';
+        card.style.transform =
+          `perspective(700px) translateY(-3px) rotateY(${((px - 0.5) * 7).toFixed(2)}deg) rotateX(${((0.5 - py) * 6).toFixed(2)}deg)`;
+        card.style.setProperty('--gx', (px * 100).toFixed(1) + '%');
+        card.style.setProperty('--gy', (py * 100).toFixed(1) + '%');
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.transition = 'transform 0.35s ease';
+        card.style.transform = '';
+      });
+    });
+  }
+
+  // ---- commands ----
   const HELP =
 `sections  ${SECTIONS.join(' · ')}
-extras    date · pwd · echo <msg> · history · neofetch · uname · ping · clear
+extras    date · pwd · echo <msg> · history · matrix · reboot · uname · ping · clear
 keys      [1-8] jump · [/] focus · [j/k] scroll · [g/G] top/end · [tab] complete`;
 
   const hist = [];
@@ -132,6 +264,14 @@ keys      [1-8] jump · [/] focus · [j/k] scroll · [g/G] top/end · [tab] comp
     if (lc === 'help' || lc === '?') { setStatus(HELP, 'muted', c); return; }
     if (lc === 'clear') { smoothTo(0); setStatus('', 'muted'); return; }
     if (lc === 'top' || lc === 'cd' || lc === 'cd ~') { smoothTo(0); setStatus('~', 'muted', c); return; }
+    if (lc === 'reboot') { setStatus('', 'muted'); smoothTo(0); bootEl.innerHTML = ''; li = 0; playCrt(nextBootLine); return; }
+    if (lc === 'matrix') {
+      if (!rainReady) { setStatus('matrix unavailable (reduced motion enabled)', 'err', c); return; }
+      setRain(true);
+      setStatus('wake up, neo…  (type `matrix off` to exit)', 'ok', c);
+      return;
+    }
+    if (lc === 'matrix off') { setRain(false); setStatus('back to reality.', 'muted', c); return; }
     if (lc === 'sudo' || lc.startsWith('sudo ')) { setStatus('permission denied: this incident will be reported.', 'err', c); return; }
     if (lc === 'rm' || lc.startsWith('rm ')) { setStatus('rm: cannot remove: portfolio is read-only (nice try)', 'err', c); return; }
     if (['exit', 'quit', ':q', ':q!', ':wq'].includes(lc)) { setStatus("you can't escape the portfolio.", 'muted', c); return; }
@@ -156,7 +296,7 @@ keys      [1-8] jump · [/] focus · [j/k] scroll · [g/G] top/end · [tab] comp
 
   const CANDIDATES = [...new Set([
     ...SECTIONS,
-    'help', 'clear', 'date', 'pwd', 'history', 'neofetch', 'uname', 'ping', 'echo ',
+    'help', 'clear', 'date', 'pwd', 'history', 'matrix', 'matrix off', 'reboot', 'neofetch', 'uname', 'ping', 'echo ',
     ...Object.keys(ALIAS),
   ])];
 
@@ -190,7 +330,7 @@ keys      [1-8] jump · [/] focus · [j/k] scroll · [g/G] top/end · [tab] comp
     }
   });
 
-  // vim-style global keys (ignored while typing)
+  // ---- vim-style global keys (ignored while typing) ----
   document.addEventListener('keydown', e => {
     if (e.target === input || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -205,7 +345,7 @@ keys      [1-8] jump · [/] focus · [j/k] scroll · [g/G] top/end · [tab] comp
 
   document.querySelector('.cmd-row').addEventListener('click', () => input.focus());
 
-  // tmux clock — Kuala Lumpur time
+  // ---- tmux clock (Kuala Lumpur) ----
   const clock = $('clock');
   if (clock) {
     const fmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'Asia/Kuala_Lumpur' });
